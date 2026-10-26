@@ -34,16 +34,32 @@ jobs:
 
       - name: Installer le NDK et CMake
         run: |
+          set +e
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "ndk;27.2.12479018" "cmake;3.22.1"
+          {
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            ls "$ANDROID_HOME/cmdline-tools" "$ANDROID_HOME/ndk" "$ANDROID_HOME/cmake"
+            yes | "$SDKMANAGER" --licenses
+            "$SDKMANAGER" "ndk;27.2.12479018" "cmake;3.22.1"
+          } > sdk.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "::error title=sdkmanager::$(tail -c 2500 sdk.log | tr -d '\r' | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"
+            exit 1
+          fi
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
       - name: Compiler l'APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+        run: gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Erreurs de compilation (annotations)
+        if: failure()
+        run: |
+          grep -n -E "error:|FAILED|What went wrong|Caused by|CMake Error|undefined reference|fatal error" -A3 build.log | head -60 > errors.log || true
+          echo "::error title=build::$(tail -c 3500 errors.log | tr -d '\r' | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"
 
       - name: Renommer l'APK
         run: cp app/build/outputs/apk/debug/app-debug.apk Dtrad.apk
