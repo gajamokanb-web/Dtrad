@@ -53,6 +53,7 @@ jobs:
           gradle-version: "8.9"
 
       - name: Compiler l'APK
+        shell: bash
         run: gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Erreurs de compilation (annotations)
