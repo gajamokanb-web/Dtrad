@@ -22,9 +22,17 @@ data class OverlayItem(
 /** Dessine les textes traduits par-dessus la page. Un tap retire la traduction. */
 class TranslationOverlayView(
     context: Context,
-    private val items: List<OverlayItem>,
+    initialItems: List<OverlayItem>,
     private val onTap: () -> Unit
 ) : View(context) {
+
+    private val items = initialItems.toMutableList()
+
+    /** Ajoute une bulle traduite (à appeler depuis le thread principal). */
+    fun addItem(item: OverlayItem) {
+        items.add(item)
+        invalidate()
+    }
 
     private val density = resources.displayMetrics.density
     private val scaledDensity = resources.displayMetrics.scaledDensity

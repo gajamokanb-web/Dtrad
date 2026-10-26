@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -18,6 +19,24 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      # Le modèle HY-MT 1,25 bit a besoin du noyau STQ1_0, proposé dans la PR #22836 de llama.cpp.
+      # On fige le commit pour que le build reste reproductible.
+      - name: Récupérer llama.cpp (PR 22836)
+        run: |
+          git init llama.cpp
+          cd llama.cpp
+          git remote add origin https://github.com/ggml-org/llama.cpp
+          git fetch --depth 1 origin 1e411d8f5a1e23525fa3265dfb4bd76265465397 \
+            || git fetch --depth 1 origin pull/22836/head
+          git checkout --detach FETCH_HEAD
+          git log --oneline -1
+
+      - name: Installer le NDK et CMake
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;27.2.12479018" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v4
         with:

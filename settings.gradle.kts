@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Dtrad"
 include(":app")
+include(":aichat")

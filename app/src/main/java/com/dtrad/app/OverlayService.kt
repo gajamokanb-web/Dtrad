@@ -26,6 +26,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
@@ -68,6 +69,9 @@ class OverlayService : Service() {
     private var overlay: TranslationOverlayView? = null
 
     private var busy = false
+    private var hymt: HyMtTranslator? = null
+    private var hymtReady = false
+    private val history = ArrayDeque<String>() // texte anglais des dernières bulles (contexte)
     private var screenW = 0
     private var screenH = 0
 
@@ -196,34 +200,91 @@ class OverlayService : Service() {
 
     // ------------------------------------------------------------ OCR + trad
 
+    private data class Block(val box: Rect, val source: String, val bg: Int, val fg: Int)
+
     private fun prepareModel() {
         scope.launch {
+            // Secours : ML Kit (petit modèle, rapide)
             try {
-                toast("Préparation du modèle de traduction…")
                 translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
-                toast("Prêt : double-tape sur la bulle T")
             } catch (e: Exception) {
-                toast("Modèle non téléchargé (connexion ?) : ${e.message}")
+                Log.w(TAG, "ML Kit model: ${e.message}")
+            }
+
+            // Moteur principal : HY-MT 1,25 bit
+            try {
+                val h = HyMtTranslator(applicationContext)
+                hymt = h
+                if (!h.isDownloaded) {
+                    toast("Téléchargement du modèle HY-MT (~440 Mo)…")
+                    h.download { pct ->
+                        handler.post { if (!busy) setBubbleLabel("$pct%") }
+                    }
+                }
+                setBubbleLabel("…")
+                toast("Chargement du modèle HY-MT…")
+                h.ensureLoaded()
+                hymtReady = true
+                toast("HY-MT prêt : double-tape sur la bulle T")
+            } catch (e: Throwable) {
+                Log.e(TAG, "HY-MT indisponible", e)
+                hymtReady = false
+                toast("HY-MT indisponible (${e.message}) : traduction ML Kit")
+            } finally {
+                if (!busy) setBubbleLabel("T")
             }
         }
     }
 
-    private suspend fun ocrAndTranslate(bmp: Bitmap): List<OverlayItem> {
-        translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+    private suspend fun recognize(bmp: Bitmap): List<Block> {
         val result = recognizer.process(InputImage.fromBitmap(bmp, 0)).await()
-        val items = mutableListOf<OverlayItem>()
+        val blocks = mutableListOf<Block>()
         for (block in result.textBlocks) {
             val box = block.boundingBox ?: continue
             val source = block.lines.joinToString(" ") { it.text }
                 .replace(Regex("\\s+"), " ")
                 .trim()
             if (source.count { it.isLetter() } < 2) continue
-            val french = translator.translate(source).await()
             val bg = sampleBackground(bmp, box)
             val fg = if (luminance(bg) > 0.5f) Color.BLACK else Color.WHITE
-            items += OverlayItem(RectF(box), french, bg, fg)
+            blocks += Block(box, source, bg, fg)
         }
-        return items
+        return blocks.sortedBy { it.box.top }
+    }
+
+    /** Contexte = dernières bulles (autres que celle-ci), ~700 caractères max. */
+    private fun contextFor(source: String): String {
+        val parts = ArrayList<String>()
+        var len = 0
+        for (i in history.indices.reversed()) {
+            val h = history[i]
+            if (h == source) continue
+            if (len + h.length > 700) break
+            parts.add(0, h)
+            len += h.length + 1
+        }
+        return parts.joinToString("\n")
+    }
+
+    private fun remember(source: String) {
+        if (history.contains(source)) return
+        history.addLast(source)
+        while (history.size > 12) history.removeFirst()
+    }
+
+    private suspend fun translateOne(source: String, previous: String): String {
+        val h = hymt
+        if (hymtReady && h != null) {
+            try {
+                val out = h.translate(source, previous)
+                if (out.isNotBlank()) return out
+            } catch (e: Throwable) {
+                Log.e(TAG, "HY-MT a échoué", e)
+                hymtReady = false
+                toast("HY-MT a échoué (${e.message}) : bascule sur ML Kit")
+            }
+        }
+        return translator.translate(source).await()
     }
 
     private fun sampleBackground(bmp: Bitmap, r: Rect): Int {
@@ -357,11 +418,24 @@ class OverlayService : Service() {
             try {
                 delay(400) // laisse l'écran se redessiner sans la bulle ni l'ancienne traduction
                 val bmp = grabFrame()
+                bubble?.visibility = View.VISIBLE
                 if (bmp == null) {
                     toast("Capture impossible, réessaie")
                 } else {
-                    val items = withContext(Dispatchers.Default) { ocrAndTranslate(bmp) }
-                    if (items.isEmpty()) toast("Aucun texte détecté") else showOverlay(items)
+                    val blocks = withContext(Dispatchers.Default) { recognize(bmp) }
+                    if (blocks.isEmpty()) {
+                        toast("Aucun texte détecté")
+                    } else {
+                        val view = showOverlay()
+                        bringBubbleToFront()
+                        for (b in blocks) {
+                            if (overlay !== view) break // l'utilisateur a fermé la traduction
+                            val french = translateOne(b.source, contextFor(b.source))
+                            remember(b.source)
+                            if (overlay !== view) break
+                            view.addItem(OverlayItem(RectF(b.box), french, b.bg, b.fg))
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 toast("Erreur : ${e.message}")
@@ -374,8 +448,8 @@ class OverlayService : Service() {
         }
     }
 
-    private fun showOverlay(items: List<OverlayItem>) {
-        val view = TranslationOverlayView(this, items) { dismissOverlay() }
+    private fun showOverlay(): TranslationOverlayView {
+        val view = TranslationOverlayView(this, emptyList()) { dismissOverlay() }
         val lp = WindowManager.LayoutParams(
             screenW,
             screenH,
@@ -395,6 +469,7 @@ class OverlayService : Service() {
         }
         wm.addView(view, lp)
         overlay = view
+        return view
     }
 
     private fun dismissOverlay() {
@@ -459,6 +534,8 @@ class OverlayService : Service() {
         projection?.stop()
         projection = null
         scope.cancel()
+        hymt?.close()
+        hymt = null
         translator.close()
         recognizer.close()
         super.onDestroy()
@@ -468,6 +545,7 @@ class OverlayService : Service() {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
         const val ACTION_STOP = "com.dtrad.app.STOP"
+        private const val TAG = "OverlayService"
         private const val CHANNEL_ID = "dtrad"
         private const val NOTIF_ID = 1
     }

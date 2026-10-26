@@ -11,13 +11,25 @@ android {
         applicationId = "com.dtrad.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+        }
+    }
+
+    // Les backends CPU de ggml sont chargés depuis le dossier des libs natives :
+    // elles doivent être extraites à l'installation.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
@@ -32,6 +44,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":aichat"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:translate:17.0.3")
