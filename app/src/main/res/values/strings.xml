@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dtrad</string>
+    <string name="title">Dtrad</string>
+    <string name="intro">Traduit les pages de manhwa (anglais → français) directement par-dessus ton lecteur.\n\n1. Autorise l\'affichage par-dessus les autres applis.\n2. Démarre la bulle et accepte la capture d\'écran.\n3. Ouvre ton lecteur : double-tape sur la bulle « T » pour traduire la page visible. Un simple tap sur la bulle (ou sur la page traduite) retire la traduction.</string>
+    <string name="btn_overlay">1. Autoriser l\'affichage par-dessus</string>
+    <string name="btn_start">2. Démarrer la bulle</string>
+    <string name="status_overlay_ok">Affichage par-dessus : autorisé ✓</string>
+    <string name="status_overlay_ko">Affichage par-dessus : pas encore autorisé</string>
+</resources>

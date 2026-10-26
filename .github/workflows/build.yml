@@ -1,0 +1,45 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Compiler l'APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Renommer l'APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Dtrad.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dtrad-apk
+          path: Dtrad.apk
+
+      - name: Publier dans les Releases (lien de téléchargement stable)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest Dtrad.apk \
+            --title "Dtrad (dernière version)" \
+            --notes "APK installable directement (signé avec la clé debug). Commit ${GITHUB_SHA::7}."
