@@ -69,8 +69,6 @@ class OverlayService : Service() {
     private var overlay: TranslationOverlayView? = null
 
     private var busy = false
-    private var hymt: HyMtTranslator? = null
-    private var hymtReady = false
     private val history = ArrayDeque<String>() // texte anglais des dernières bulles (contexte)
     private var screenW = 0
     private var screenH = 0
@@ -202,6 +200,28 @@ class OverlayService : Service() {
 
     private data class Block(val box: Rect, val source: String, val bg: Int, val fg: Int)
 
+    /** Suit l'avancement de HY-MT sur la bulle (pourcentage / « … » / « T »). */
+    private val modelListener: (ModelState) -> Unit = { st ->
+        when (st) {
+            is ModelState.Downloading -> if (!busy) {
+                setBubbleLabel(if (st.total > 0) "${(st.done * 100 / st.total).toInt()}%" else "↓")
+            }
+
+            is ModelState.Loading -> if (!busy) setBubbleLabel("…")
+            is ModelState.Ready -> {
+                if (!busy) setBubbleLabel("T")
+                toast("HY-MT prêt : double-tape sur la bulle T")
+            }
+
+            is ModelState.Error -> {
+                if (!busy) setBubbleLabel("T")
+                toast("HY-MT indisponible (${st.message}) : traduction ML Kit")
+            }
+
+            is ModelState.Idle -> if (!busy) setBubbleLabel("T")
+        }
+    }
+
     private fun prepareModel() {
         scope.launch {
             // Secours : ML Kit (petit modèle, rapide)
@@ -210,30 +230,10 @@ class OverlayService : Service() {
             } catch (e: Exception) {
                 Log.w(TAG, "ML Kit model: ${e.message}")
             }
-
-            // Moteur principal : HY-MT 1,25 bit
-            try {
-                val h = HyMtTranslator(applicationContext)
-                hymt = h
-                if (!h.isDownloaded) {
-                    toast("Téléchargement du modèle HY-MT (~440 Mo)…")
-                    h.download { pct ->
-                        handler.post { if (!busy) setBubbleLabel("$pct%") }
-                    }
-                }
-                setBubbleLabel("…")
-                toast("Chargement du modèle HY-MT…")
-                h.ensureLoaded()
-                hymtReady = true
-                toast("HY-MT prêt : double-tape sur la bulle T")
-            } catch (e: Throwable) {
-                Log.e(TAG, "HY-MT indisponible", e)
-                hymtReady = false
-                toast("HY-MT indisponible (${e.message}) : traduction ML Kit")
-            } finally {
-                if (!busy) setBubbleLabel("T")
-            }
         }
+        // Moteur principal : HY-MT (téléchargement + chargement, partagés avec l'écran principal)
+        ModelManager.addListener(modelListener)
+        ModelManager.start(applicationContext)
     }
 
     private suspend fun recognize(bmp: Bitmap): List<Block> {
@@ -273,15 +273,14 @@ class OverlayService : Service() {
     }
 
     private suspend fun translateOne(source: String, previous: String): String {
-        val h = hymt
-        if (hymtReady && h != null) {
+        val h = ModelManager.translator
+        if (ModelManager.state is ModelState.Ready && h != null) {
             try {
                 val out = h.translate(source, previous)
                 if (out.isNotBlank()) return out
             } catch (e: Throwable) {
                 Log.e(TAG, "HY-MT a échoué", e)
-                hymtReady = false
-                toast("HY-MT a échoué (${e.message}) : bascule sur ML Kit")
+                ModelManager.markFailed(e.message)
             }
         }
         return translator.translate(source).await()
@@ -534,8 +533,8 @@ class OverlayService : Service() {
         projection?.stop()
         projection = null
         scope.cancel()
-        hymt?.close()
-        hymt = null
+        ModelManager.removeListener(modelListener)
+        ModelManager.unload()
         translator.close()
         recognizer.close()
         super.onDestroy()
