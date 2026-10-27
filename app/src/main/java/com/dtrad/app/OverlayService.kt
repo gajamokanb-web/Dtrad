@@ -33,6 +33,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -51,6 +52,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import li.joye.yakuyomi.engine.PageResult
 
 class OverlayService : Service() {
 
@@ -66,7 +68,7 @@ class OverlayService : Service() {
 
     private var bubble: TextView? = null
     private var bubbleParams: WindowManager.LayoutParams? = null
-    private var overlay: TranslationOverlayView? = null
+    private var overlay: View? = null
 
     private var busy = false
     private val history = ArrayDeque<String>() // texte anglais des dernières bulles (contexte)
@@ -274,7 +276,7 @@ class OverlayService : Service() {
 
     private suspend fun translateOne(source: String, previous: String): String {
         val h = ModelManager.translator
-        if (ModelManager.state is ModelState.Ready && h != null) {
+        if (ModelManager.hymtReady && h != null) {
             try {
                 val out = h.translate(source, previous)
                 if (out.isNotBlank()) return out
@@ -414,31 +416,27 @@ class OverlayService : Service() {
         bubble?.visibility = View.INVISIBLE
 
         scope.launch {
+            val ticker = launch {
+                var sec = 0
+                while (true) {
+                    delay(1000)
+                    sec++
+                    setBubbleLabel("${sec}s")
+                }
+            }
             try {
                 delay(400) // laisse l'écran se redessiner sans la bulle ni l'ancienne traduction
                 val bmp = grabFrame()
                 bubble?.visibility = View.VISIBLE
                 if (bmp == null) {
                     toast("Capture impossible, réessaie")
-                } else {
-                    val blocks = withContext(Dispatchers.Default) { recognize(bmp) }
-                    if (blocks.isEmpty()) {
-                        toast("Aucun texte détecté")
-                    } else {
-                        val view = showOverlay()
-                        bringBubbleToFront()
-                        for (b in blocks) {
-                            if (overlay !== view) break // l'utilisateur a fermé la traduction
-                            val french = translateOne(b.source, contextFor(b.source))
-                            remember(b.source)
-                            if (overlay !== view) break
-                            view.addItem(OverlayItem(RectF(b.box), french, b.bg, b.fg))
-                        }
-                    }
+                } else if (!translateWithEngine(bmp)) {
+                    translateWithMlKit(bmp)
                 }
             } catch (e: Exception) {
                 toast("Erreur : ${e.message}")
             } finally {
+                ticker.cancel()
                 bubble?.visibility = View.VISIBLE
                 setBubbleLabel("T")
                 bringBubbleToFront()
@@ -447,8 +445,63 @@ class OverlayService : Service() {
         }
     }
 
+    /** Moteur d'image : détection, OCR, effacement, HY-MT, mise en page. False = utiliser le secours. */
+    private suspend fun translateWithEngine(bmp: Bitmap): Boolean {
+        val engine = ModelManager.engine ?: return false
+        return when (val r = withContext(Dispatchers.Default) { engine.translatePage(bmp) }) {
+            is PageResult.Translated -> {
+                showPageOverlay(r.page)
+                true
+            }
+
+            is PageResult.Skipped -> {
+                toast("Aucun texte à traduire sur cette page")
+                true
+            }
+
+            is PageResult.Failed -> {
+                Log.w(TAG, "moteur d'image : ${r.reason}")
+                toast("Moteur d'image en échec : traduction simple")
+                false
+            }
+        }
+    }
+
+    /** Secours : OCR ML Kit + rectangles unis, bulle par bulle. */
+    private suspend fun translateWithMlKit(bmp: Bitmap) {
+        val blocks = withContext(Dispatchers.Default) { recognize(bmp) }
+        if (blocks.isEmpty()) {
+            toast("Aucun texte détecté")
+            return
+        }
+        val view = showOverlay()
+        bringBubbleToFront()
+        for (b in blocks) {
+            if (overlay !== view) break
+            val french = translateOne(b.source, contextFor(b.source))
+            remember(b.source)
+            if (overlay !== view) break
+            view.addItem(OverlayItem(RectF(b.box), french, b.bg, b.fg))
+        }
+    }
+
+    private fun showPageOverlay(page: Bitmap) {
+        val iv = ImageView(this).apply {
+            setImageBitmap(page)
+            scaleType = ImageView.ScaleType.FIT_XY
+            setOnClickListener { dismissOverlay() }
+        }
+        addOverlayWindow(iv)
+        bringBubbleToFront()
+    }
+
     private fun showOverlay(): TranslationOverlayView {
         val view = TranslationOverlayView(this, emptyList()) { dismissOverlay() }
+        addOverlayWindow(view)
+        return view
+    }
+
+    private fun addOverlayWindow(view: View) {
         val lp = WindowManager.LayoutParams(
             screenW,
             screenH,
@@ -468,7 +521,6 @@ class OverlayService : Service() {
         }
         wm.addView(view, lp)
         overlay = view
-        return view
     }
 
     private fun dismissOverlay() {

@@ -26,3 +26,11 @@ Le workflow `.github/workflows/build.yml` récupère llama.cpp, installe le NDK 
 - Téléphones ARM 64 bits uniquement, mode portrait.
 - La traduction avec HY-MT prend quelques secondes par bulle.
 - OCR latin uniquement ; les polices très stylisées et les onomatopées sont moins bien lues.
+
+## Moteur d'image (v2)
+
+Détection du texte (DBNet), OCR, effacement par IA (AOT-GAN) et mise en page viennent de
+[yakuyomi-engine](https://github.com/joyeli/yakuyomi-engine) (GPL-3.0, voir `NOTICE.md`).
+La traduction est faite par HY-MT 1.8B 1,25 bit, sur le téléphone, avec les bulles précédentes en contexte.
+Téléchargements au premier lancement : ~250 Mo (image) + ~440 Mo (HY-MT). Le projet est donc sous GPL-3.0.
+Si le moteur d'image échoue, l'appli se rabat sur ML Kit (rectangles unis).

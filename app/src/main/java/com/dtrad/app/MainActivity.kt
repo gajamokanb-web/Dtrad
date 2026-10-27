@@ -102,10 +102,10 @@ class MainActivity : Activity() {
                     modelProgress.isIndeterminate = false
                     modelProgress.progress = pct
                     modelStatus.text =
-                        "Téléchargement : ${mb(s.done)} / ${mb(s.total)} Mo ($pct %)\nGarde l'appli ouverte jusqu'à la fin."
+                        "${s.step}\nTéléchargement : ${mb(s.done)} / ${mb(s.total)} Mo ($pct %)\nGarde l'appli ouverte jusqu'à la fin."
                 } else {
                     modelProgress.isIndeterminate = true
-                    modelStatus.text = "Téléchargement : ${mb(s.done)} Mo…\nGarde l'appli ouverte jusqu'à la fin."
+                    modelStatus.text = "${s.step}\nTéléchargement : ${mb(s.done)} Mo…\nGarde l'appli ouverte jusqu'à la fin."
                 }
             }
 
@@ -113,7 +113,7 @@ class MainActivity : Activity() {
                 btnModel.visibility = View.GONE
                 modelProgress.visibility = View.VISIBLE
                 modelProgress.isIndeterminate = true
-                modelStatus.setText(R.string.model_loading)
+                modelStatus.text = "Installation en cours\n${s.step}\nNe ferme pas l appli."
             }
 
             is ModelState.Ready -> {

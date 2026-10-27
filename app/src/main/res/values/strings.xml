@@ -7,11 +7,10 @@
     <string name="btn_start">2. Démarrer la bulle</string>
     <string name="status_overlay_ok">Affichage par-dessus : autorisé ✓</string>
     <string name="status_overlay_ko">Affichage par-dessus : pas encore autorisé</string>
-    <string name="model_title">Modèle de traduction HY-MT</string>
-    <string name="btn_model">Télécharger le modèle</string>
+    <string name="model_title">Moteur de traduction (images + HY-MT)</string>
+    <string name="btn_model">Télécharger les modèles</string>
     <string name="btn_model_retry">Réessayer</string>
-    <string name="model_idle_unmetered">Modèle prêt à être chargé…</string>
-    <string name="model_idle_metered">Modèle non téléchargé (environ 440 Mo). Connecte-toi en Wi-Fi pour le télécharger automatiquement, ou touche le bouton pour l\'utiliser avec tes données mobiles.</string>
-    <string name="model_loading">Installation : chargement du modèle en mémoire… (peut prendre une minute, ne ferme pas l\'appli)</string>
-    <string name="model_ready">✓ HY-MT opérationnel (traduction hors ligne avec contexte)</string>
+    <string name="model_idle_unmetered">Préparation des modèles…</string>
+    <string name="model_idle_metered">Modèles non téléchargés (environ 690 Mo au total). Connecte-toi en Wi-Fi pour le télécharger automatiquement, ou touche le bouton pour l\'utiliser avec tes données mobiles.</string>
+    <string name="model_ready">✓ Opérationnel : détection, effacement, HY-MT et mise en page, hors ligne</string>
 </resources>

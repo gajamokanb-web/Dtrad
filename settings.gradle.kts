@@ -16,4 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Dtrad"
 include(":app")
-include(":aichat")
+include(":aichat")        // llama.cpp (HY-MT)
+include(":inference-core") // NCNN + détection (yakuyomi-engine)
+include(":engine")         // OCR, effacement, mise en page (yakuyomi-engine)

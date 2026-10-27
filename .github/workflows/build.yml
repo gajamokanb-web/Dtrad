@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       # Le modèle HY-MT 1,25 bit a besoin du noyau STQ1_0, proposé dans la PR #22836 de llama.cpp.
       # On fige le commit pour que le build reste reproductible.
@@ -40,7 +40,7 @@ jobs:
             echo "ANDROID_HOME=$ANDROID_HOME"
             ls "$ANDROID_HOME/cmdline-tools" "$ANDROID_HOME/ndk" "$ANDROID_HOME/cmake"
             yes | "$SDKMANAGER" --licenses
-            "$SDKMANAGER" "ndk;27.2.12479018" "cmake;3.22.1"
+            "$SDKMANAGER" "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-37"
           } > sdk.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
@@ -50,7 +50,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "9.5.1"
 
       - name: Compiler l'APK
         shell: bash
