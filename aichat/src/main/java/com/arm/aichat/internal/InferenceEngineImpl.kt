@@ -82,6 +82,8 @@ internal class InferenceEngineImpl private constructor(
 
     private external fun load(modelPath: String): Int
 
+    private external fun lastErrors(): String
+
     private external fun prepare(): Int
 
     private external fun systemInfo(): String
@@ -168,7 +170,7 @@ internal class InferenceEngineImpl private constructor(
                 _state.value = InferenceEngine.State.LoadingModel
                 load(pathToModel).let {
                     // TODO-han.yin: find a better way to pass other error codes
-                    if (it != 0) throw UnsupportedArchitectureException()
+                    if (it != 0) throw UnsupportedArchitectureException(lastErrors())
                 }
                 prepare().let {
                     if (it != 0) throw IOException("Failed to prepare resources")

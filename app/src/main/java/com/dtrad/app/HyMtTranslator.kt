@@ -107,7 +107,7 @@ class HyMtTranslator(appContext: Context) {
             try {
                 engine.loadModel(modelFile.absolutePath)
             } catch (e: com.arm.aichat.UnsupportedArchitectureException) {
-                throw IOException(diagnose(), e)
+                throw IOException(diagnose() + "\n" + e.details.lines().filter { it.isNotBlank() }.take(4).joinToString("\n") { it.take(160) }, e)
             }
         }
         loaded = true

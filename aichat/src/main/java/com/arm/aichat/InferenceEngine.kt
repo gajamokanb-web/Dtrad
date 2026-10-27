@@ -95,4 +95,4 @@ val State.isModelLoaded: Boolean
         this is State.ProcessingUserPrompt ||
         this is State.Generating
 
-class UnsupportedArchitectureException : Exception()
+class UnsupportedArchitectureException(val details: String = "") : Exception(details)
