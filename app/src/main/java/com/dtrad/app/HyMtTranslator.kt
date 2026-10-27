@@ -145,9 +145,9 @@ class HyMtTranslator(appContext: Context) {
 
     companion object {
         private const val TAG = "HyMtTranslator"
-        private const val MODEL_FILE = "Hy-MT1.5-1.8B-1.25bit.gguf"
+        private const val MODEL_FILE = "Hy-MT2-1.8B-1.25Bit.gguf"
         private const val MODEL_URL =
-            "https://huggingface.co/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/main/Hy-MT1.5-1.8B-1.25bit.gguf"
+            "https://huggingface.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf"
         private const val MIN_MODEL_BYTES = 100L * 1024 * 1024
 
         fun modelFile(context: Context) = File(context.filesDir, MODEL_FILE)

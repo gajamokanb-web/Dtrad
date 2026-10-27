@@ -42,6 +42,15 @@ static void capture_log_callback(enum ggml_log_level level, const char *text, vo
     }
 }
 
+static std::string g_last_errors;
+
+static void capture_log_callback(enum ggml_log_level level, const char *text, void *user) {
+    aichat_android_log_callback(level, text, user);
+    if (level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_WARN) {
+        if (g_last_errors.size() < 1500) g_last_errors += text;
+    }
+}
+
 static llama_model                      * g_model;
 static llama_context                    * g_context;
 static llama_batch                        g_batch;
@@ -73,6 +82,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_load(JNIEnv *env, jobject, jstr
     const auto *model_path = env->GetStringUTFChars(jmodel_path, 0);
     LOGd("%s: Loading model from: \n%s\n", __func__, model_path);
 
+    g_last_errors.clear();
     g_last_errors.clear();
     auto *model = llama_model_load_from_file(model_path, model_params);
     env->ReleaseStringUTFChars(jmodel_path, model_path);
@@ -618,6 +628,12 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processRaw(
     current_position += (int) tokens.size();
     stop_generation_position = current_position + n_predict;
     return 0;
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_lastErrors(JNIEnv *env, jobject /*unused*/) {
+    return env->NewStringUTF(g_last_errors.c_str());
 }
 
 extern "C"

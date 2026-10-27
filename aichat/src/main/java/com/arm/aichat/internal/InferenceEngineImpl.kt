@@ -84,6 +84,8 @@ internal class InferenceEngineImpl private constructor(
 
     private external fun lastErrors(): String
 
+    private external fun lastErrors(): String
+
     private external fun prepare(): Int
 
     private external fun systemInfo(): String
