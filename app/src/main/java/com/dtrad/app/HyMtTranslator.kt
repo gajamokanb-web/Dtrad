@@ -19,6 +19,8 @@ import java.net.URL
  */
 class HyMtTranslator(appContext: Context) {
 
+    private val ctx = appContext.applicationContext
+
     private val engine: InferenceEngine = AiChat.getInferenceEngine(appContext)
     private val modelFile = modelFile(appContext)
     private var loaded = false
@@ -78,6 +80,18 @@ class HyMtTranslator(appContext: Context) {
         }
     }
 
+    /** Message lisible quand llama.cpp refuse le fichier ; un fichier abîmé est supprimé pour être re-téléchargé. */
+    private fun diagnose(): String {
+        val size = modelFile.length()
+        val magic = runCatching { modelFile.inputStream().use { i -> ByteArray(4).also { i.read(it) }.toString(Charsets.US_ASCII) } }
+            .getOrDefault("?")
+        val cpuLibs = File(ctx.applicationInfo.nativeLibraryDir).list().orEmpty().count { it.startsWith("libggml-cpu") }
+        val corrupt = magic != "GGUF" || size < 400_000_000L
+        if (corrupt) modelFile.delete()
+        return "Chargement HY-MT refusé (fichier ${size / 1_000_000} Mo, en-tête $magic, ${cpuLibs} backends CPU)" +
+            if (corrupt) " : fichier abîmé, supprimé — touche Réessayer pour le re-télécharger" else ""
+    }
+
     /** Charge le modèle en mémoire (lent la première fois). */
     suspend fun ensureLoaded() {
         if (loaded) return
@@ -89,7 +103,13 @@ class HyMtTranslator(appContext: Context) {
             engine.cleanUp() // remet le moteur à zéro pour un nouvel essai
             st = engine.state.first { it is InferenceEngine.State.Initialized }
         }
-        if (st is InferenceEngine.State.Initialized) engine.loadModel(modelFile.absolutePath)
+        if (st is InferenceEngine.State.Initialized) {
+            try {
+                engine.loadModel(modelFile.absolutePath)
+            } catch (e: com.arm.aichat.UnsupportedArchitectureException) {
+                throw IOException(diagnose(), e)
+            }
+        }
         loaded = true
     }
 
